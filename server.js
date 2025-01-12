@@ -27,7 +27,7 @@ app.get("/", (req, res) => {
                     border: none;
                     border-radius: 10px;
                 }
-                #status, #coords {
+                #orientationStatus, #motionStatus, #orientationData, #motionData {
                     margin: 20px 0;
                     padding: 15px;
                     background: #f0f0f0;
@@ -36,46 +36,87 @@ app.get("/", (req, res) => {
             </style>
         </head>
         <body>
-            <button id="requestPermission">Request Motion Access</button>
-            <div id="status">Permission status: unknown</div>
-            <div id="coords">Waiting for motion data...</div>
+            <button id="requestOrientationPermission">Request Orientation Access</button>
+            <button id="requestMotionPermission">Request Accelerometer Access</button>
+            <div id="orientationStatus">Orientation permission: unknown</div>
+            <div id="motionStatus">Accelerometer permission: unknown</div>
+            <div id="orientationData">Waiting for orientation data...</div>
+            <div id="motionData">Waiting for accelerometer data...</div>
 
             <script>
-                const status = document.getElementById('status');
-                const coords = document.getElementById('coords');
-                const button = document.getElementById('requestPermission');
+                const orientationStatus = document.getElementById('orientationStatus');
+                const motionStatus = document.getElementById('motionStatus');
+                const orientationData = document.getElementById('orientationData');
+                const motionData = document.getElementById('motionData');
 
-                async function requestMotionAccess() {
+                async function requestOrientationPermission() {
                     try {
                         if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-                            // iOS 13+ devices
-                            status.textContent = 'Requesting permission...';
+                            orientationStatus.textContent = 'Requesting orientation permission...';
                             const permission = await DeviceOrientationEvent.requestPermission();
-                            status.textContent = 'Permission status: ' + permission;
+                            orientationStatus.textContent = 'Orientation permission: ' + permission;
+                            
+                            if (permission === 'granted') {
+                                startOrientationTracking();
+                            }
+                        } else {
+                            orientationStatus.textContent = 'Orientation permission not required';
+                            startOrientationTracking();
+                        }
+                    } catch (error) {
+                        orientationStatus.textContent = 'Orientation Error: ' + error.message;
+                    }
+                }
+
+                async function requestMotionPermission() {
+                    try {
+                        if (typeof DeviceMotionEvent.requestPermission === 'function') {
+                            motionStatus.textContent = 'Requesting accelerometer permission...';
+                            const permission = await DeviceMotionEvent.requestPermission();
+                            motionStatus.textContent = 'Accelerometer permission: ' + permission;
                             
                             if (permission === 'granted') {
                                 startMotionTracking();
                             }
                         } else {
-                            // Non-iOS devices
-                            status.textContent = 'Permission not required for this device';
+                            motionStatus.textContent = 'Accelerometer permission not required';
                             startMotionTracking();
                         }
                     } catch (error) {
-                        status.textContent = 'Error: ' + error.message;
+                        motionStatus.textContent = 'Accelerometer Error: ' + error.message;
                     }
                 }
 
-                function startMotionTracking() {
+                function startOrientationTracking() {
                     window.addEventListener('deviceorientation', (event) => {
-                        coords.innerHTML = 
+                        orientationData.innerHTML = 
                             'Beta (front/back tilt): ' + (event.beta?.toFixed(1) || 'null') + '°<br>' +
                             'Gamma (left/right tilt): ' + (event.gamma?.toFixed(1) || 'null') + '°<br>' +
-                            'Alpha (compass direction): ' + (event.alpha?.toFixed(1) || 'null') + '°';
+                            'Alpha (compass): ' + (event.alpha?.toFixed(1) || 'null') + '°';
                     });
                 }
 
-                button.addEventListener('click', requestMotionAccess);
+                function startMotionTracking() {
+                    window.addEventListener('devicemotion', (event) => {
+                        const acc = event.acceleration;
+                        const accGravity = event.accelerationIncludingGravity;
+                        
+                        motionData.innerHTML = 
+                            'Acceleration:<br>' +
+                            'X: ' + (acc?.x?.toFixed(2) || 'null') + ' m/s²<br>' +
+                            'Y: ' + (acc?.y?.toFixed(2) || 'null') + ' m/s²<br>' +
+                            'Z: ' + (acc?.z?.toFixed(2) || 'null') + ' m/s²<br><br>' +
+                            'Acceleration with gravity:<br>' +
+                            'X: ' + (accGravity?.x?.toFixed(2) || 'null') + ' m/s²<br>' +
+                            'Y: ' + (accGravity?.y?.toFixed(2) || 'null') + ' m/s²<br>' +
+                            'Z: ' + (accGravity?.z?.toFixed(2) || 'null') + ' m/s²';
+                    });
+                }
+
+                document.getElementById('requestOrientationPermission')
+                    .addEventListener('click', requestOrientationPermission);
+                document.getElementById('requestMotionPermission')
+                    .addEventListener('click', requestMotionPermission);
             </script>
         </body>
         </html>
