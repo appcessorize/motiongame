@@ -9,114 +9,171 @@ app.get("/", (req, res) => {
         <!DOCTYPE html>
         <html>
         <head>
-            <title>Motion Test</title>
+            <title>Ball Physics</title>
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <style>
                 body {
+                    margin: 0;
+                    overflow: hidden;
                     font-family: -apple-system, system-ui, sans-serif;
+                }
+                #gameArea {
+                    position: relative;
+                    width: 100vw;
+                    height: 100vh;
+                    background: #f0f0f0;
+                    overflow: hidden;
+                }
+                #ball {
+                    position: absolute;
+                    width: 50px;
+                    height: 50px;
+                    background: #ff3b30;
+                    border-radius: 50%;
+                    transition: transform 0.1s linear;
+                }
+                #controls {
+                    position: fixed;
+                    top: 0;
+                    left: 0;
                     padding: 20px;
-                    font-size: 20px;
+                    background: rgba(255, 255, 255, 0.8);
+                    z-index: 100;
                 }
                 button {
-                    font-size: 24px;
-                    padding: 15px 30px;
-                    margin: 20px 0;
-                    display: block;
+                    font-size: 20px;
+                    padding: 10px 20px;
+                    margin: 5px;
                     background: #007AFF;
                     color: white;
                     border: none;
-                    border-radius: 10px;
-                }
-                #orientationStatus, #motionStatus, #orientationData, #motionData {
-                    margin: 20px 0;
-                    padding: 15px;
-                    background: #f0f0f0;
                     border-radius: 8px;
+                }
+                #debug {
+                    font-size: 14px;
+                    color: #666;
                 }
             </style>
         </head>
         <body>
-            <button id="requestOrientationPermission">Request Orientation Access</button>
-            <button id="requestMotionPermission">Request Accelerometer Access</button>
-            <div id="orientationStatus">Orientation permission: unknown</div>
-            <div id="motionStatus">Accelerometer permission: unknown</div>
-            <div id="orientationData">Waiting for orientation data...</div>
-            <div id="motionData">Waiting for accelerometer data...</div>
+            <div id="gameArea">
+                <div id="ball"></div>
+            </div>
+            <div id="controls">
+                <button id="startButton">Start Motion Controls</button>
+                <div id="debug">Waiting for motion data...</div>
+            </div>
 
             <script>
-                const orientationStatus = document.getElementById('orientationStatus');
-                const motionStatus = document.getElementById('motionStatus');
-                const orientationData = document.getElementById('orientationData');
-                const motionData = document.getElementById('motionData');
+                const ball = document.getElementById('ball');
+                const debug = document.getElementById('debug');
+                const startButton = document.getElementById('startButton');
 
-                async function requestOrientationPermission() {
+                // Ball physics state
+                let ballState = {
+                    x: window.innerWidth / 2,
+                    y: window.innerHeight / 2,
+                    velocityX: 0,
+                    velocityY: 0,
+                    friction: 0.98,
+                    gravity: 0.2,
+                    bounce: 0.7
+                };
+
+                function updateBall() {
+                    // Apply position
+                    ball.style.transform = 'translate(' + 
+                        (ballState.x - 25) + 'px, ' + 
+                        (ballState.y - 25) + 'px)';
+                }
+
+                // Set initial ball position
+                updateBall();
+
+                async function startMotionControls() {
                     try {
+                        // Request both permissions for iOS
                         if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-                            orientationStatus.textContent = 'Requesting orientation permission...';
-                            const permission = await DeviceOrientationEvent.requestPermission();
-                            orientationStatus.textContent = 'Orientation permission: ' + permission;
+                            const orientationPermission = await DeviceOrientationEvent.requestPermission();
+                            const motionPermission = await DeviceMotionEvent.requestPermission();
                             
-                            if (permission === 'granted') {
-                                startOrientationTracking();
+                            if (orientationPermission === 'granted' && motionPermission === 'granted') {
+                                startTracking();
                             }
                         } else {
-                            orientationStatus.textContent = 'Orientation permission not required';
-                            startOrientationTracking();
+                            startTracking();
                         }
                     } catch (error) {
-                        orientationStatus.textContent = 'Orientation Error: ' + error.message;
+                        debug.textContent = 'Error: ' + error.message;
                     }
                 }
 
-                async function requestMotionPermission() {
-                    try {
-                        if (typeof DeviceMotionEvent.requestPermission === 'function') {
-                            motionStatus.textContent = 'Requesting accelerometer permission...';
-                            const permission = await DeviceMotionEvent.requestPermission();
-                            motionStatus.textContent = 'Accelerometer permission: ' + permission;
-                            
-                            if (permission === 'granted') {
-                                startMotionTracking();
-                            }
-                        } else {
-                            motionStatus.textContent = 'Accelerometer permission not required';
-                            startMotionTracking();
-                        }
-                    } catch (error) {
-                        motionStatus.textContent = 'Accelerometer Error: ' + error.message;
-                    }
-                }
-
-                function startOrientationTracking() {
+                function startTracking() {
+                    // Track device orientation for rolling
                     window.addEventListener('deviceorientation', (event) => {
-                        orientationData.innerHTML = 
-                            'Beta (front/back tilt): ' + (event.beta?.toFixed(1) || 'null') + '°<br>' +
-                            'Gamma (left/right tilt): ' + (event.gamma?.toFixed(1) || 'null') + '°<br>' +
-                            'Alpha (compass): ' + (event.alpha?.toFixed(1) || 'null') + '°';
-                    });
-                }
+                        const tiltX = event.gamma; // Left/Right tilt (-90 to 90)
+                        const tiltY = event.beta;  // Front/Back tilt (-180 to 180)
 
-                function startMotionTracking() {
+                        // Apply tilt-based acceleration
+                        ballState.velocityX += (tiltX / 45) * 0.5;
+                        ballState.velocityY += (tiltY / 45) * 0.5;
+
+                        // Apply friction
+                        ballState.velocityX *= ballState.friction;
+                        ballState.velocityY *= ballState.friction;
+
+                        // Update position
+                        ballState.x += ballState.velocityX;
+                        ballState.y += ballState.velocityY;
+
+                        // Screen bounds collision
+                        if (ballState.x < 25) {
+                            ballState.x = 25;
+                            ballState.velocityX *= -ballState.bounce;
+                        }
+                        if (ballState.x > window.innerWidth - 25) {
+                            ballState.x = window.innerWidth - 25;
+                            ballState.velocityX *= -ballState.bounce;
+                        }
+                        if (ballState.y < 25) {
+                            ballState.y = 25;
+                            ballState.velocityY *= -ballState.bounce;
+                        }
+                        if (ballState.y > window.innerHeight - 25) {
+                            ballState.y = window.innerHeight - 25;
+                            ballState.velocityY *= -ballState.bounce;
+                        }
+
+                        updateBall();
+                        
+                        debug.textContent = 
+                            'Tilt - X: ' + tiltX.toFixed(1) + '° Y: ' + tiltY.toFixed(1) + '°\\n' +
+                            'Velocity - X: ' + ballState.velocityX.toFixed(1) + ' Y: ' + ballState.velocityY.toFixed(1);
+                    });
+
+                    // Track acceleration for "bouncing" effect
                     window.addEventListener('devicemotion', (event) => {
                         const acc = event.acceleration;
-                        const accGravity = event.accelerationIncludingGravity;
-                        
-                        motionData.innerHTML = 
-                            'Acceleration:<br>' +
-                            'X: ' + (acc?.x?.toFixed(2) || 'null') + ' m/s²<br>' +
-                            'Y: ' + (acc?.y?.toFixed(2) || 'null') + ' m/s²<br>' +
-                            'Z: ' + (acc?.z?.toFixed(2) || 'null') + ' m/s²<br><br>' +
-                            'Acceleration with gravity:<br>' +
-                            'X: ' + (accGravity?.x?.toFixed(2) || 'null') + ' m/s²<br>' +
-                            'Y: ' + (accGravity?.y?.toFixed(2) || 'null') + ' m/s²<br>' +
-                            'Z: ' + (accGravity?.z?.toFixed(2) || 'null') + ' m/s²';
+                        if (acc && acc.x !== null && acc.y !== null) {
+                            // Add sudden acceleration to velocity
+                            ballState.velocityX += acc.x * 0.2;
+                            ballState.velocityY += acc.y * 0.2;
+                        }
                     });
+
+                    startButton.style.display = 'none';
+                    debug.textContent = 'Motion controls active';
                 }
 
-                document.getElementById('requestOrientationPermission')
-                    .addEventListener('click', requestOrientationPermission);
-                document.getElementById('requestMotionPermission')
-                    .addEventListener('click', requestMotionPermission);
+                startButton.addEventListener('click', startMotionControls);
+
+                // Handle window resize
+                window.addEventListener('resize', () => {
+                    // Keep ball in bounds when window is resized
+                    ballState.x = Math.min(Math.max(25, ballState.x), window.innerWidth - 25);
+                    ballState.y = Math.min(Math.max(25, ballState.y), window.innerHeight - 25);
+                    updateBall();
+                });
             </script>
         </body>
         </html>
